@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  claims-api:
+    build: .
+    container_name: claims-resubmission-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - REFERENCE_DATE=2025-07-30
+      - OUTPUT_DIRECTORY=/app/output
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+    restart: unless-stopped
+    networks:
+      - claims-network
+
+  claims-dagster:
+    build: .
+    container_name: claims-resubmission-dagster
+    command:
+      [
+        "dagster-webserver",
+        "-f",
+        "dagster_pipeline.py",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "3000",
+      ]
+    ports:
+      - "3000:3000"
+    environment:
+      - DAGSTER_HOME=/app/dagster_home
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+      - dagster_home:/app/dagster_home
+    restart: unless-stopped
+    networks:
+      - claims-network
+    depends_on:
+      - claims-api
+
+  # Optional: Add PostgreSQL for production data storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: claims-postgres
+    environment:
+      POSTGRES_DB: claims_pipeline
+      POSTGRES_USER: claims_user
+      POSTGRES_PASSWORD: claims_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - claims-network
+    restart: unless-stopped
+
+  # Optional: Add Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: claims-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - claims-network
+    restart: unless-stopped
+
+networks:
+  claims-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  dagster_home:
